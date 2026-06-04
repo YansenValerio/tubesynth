@@ -61,6 +61,37 @@ export function QaPanel({
   const [thinking, setThinking] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
+  const storageKey = `tubesynth:qa:${metadata.youtubeId}`;
+  const loaded = useRef(false);
+
+  // Restore any saved conversation for this video (survives reloads).
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem(storageKey);
+      // Hydrating state from an external store (localStorage) on mount.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      if (raw) setMessages(JSON.parse(raw) as QaMessage[]);
+    } catch {
+      // ignore malformed/unavailable storage
+    }
+    loaded.current = true;
+  }, [storageKey]);
+
+  // Persist on every change once the initial load has run.
+  useEffect(() => {
+    if (!loaded.current) return;
+    try {
+      if (messages.length === 0) window.localStorage.removeItem(storageKey);
+      else window.localStorage.setItem(storageKey, JSON.stringify(messages));
+    } catch {
+      // ignore quota/availability errors
+    }
+  }, [messages, storageKey]);
+
+  function clearConversation() {
+    setMessages([]);
+  }
+
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape" && open) onClose();
@@ -232,9 +263,17 @@ export function QaPanel({
               <Send className="h-4 w-4" />
             </button>
           </form>
-          <p className="mt-1.5 px-1 text-xs text-text-tertiary">
-            Cmd+Enter to send · Esc to close
-          </p>
+          <div className="mt-1.5 flex items-center justify-between px-1 text-xs text-text-tertiary">
+            <span>Cmd+Enter to send · Esc to close</span>
+            {messages.length > 0 ? (
+              <button
+                onClick={clearConversation}
+                className="transition-colors hover:text-text-primary"
+              >
+                Clear conversation
+              </button>
+            ) : null}
+          </div>
         </div>
       </aside>
     </>
