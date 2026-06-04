@@ -100,7 +100,7 @@ export async function persistSummary(
       status: "completed",
       progress: 100,
       content,
-      model_used: process.env.GEMINI_MODEL ?? "gemini-2.0-flash",
+      model_used: process.env.GEMINI_MODEL ?? "gemini-2.5-flash",
       tokens_input: usage.tokensInput,
       tokens_output: usage.tokensOutput,
       processing_time_ms: usage.processingMs,
@@ -191,7 +191,7 @@ export async function completeSummary(
       current_step: "Done",
       content,
       strategy,
-      model_used: process.env.GEMINI_MODEL ?? "gemini-2.0-flash",
+      model_used: process.env.GEMINI_MODEL ?? "gemini-2.5-flash",
       processing_time_ms: usage.processingMs,
       completed_at: new Date().toISOString(),
     })

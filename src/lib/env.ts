@@ -47,7 +47,7 @@ export const env = {
     get apiKey() {
       return required("GEMINI_API_KEY");
     },
-    model: optional("GEMINI_MODEL", "gemini-2.0-flash"),
+    model: optional("GEMINI_MODEL", "gemini-2.5-flash"),
   },
 } as const;
 
