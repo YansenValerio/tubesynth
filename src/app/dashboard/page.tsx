@@ -4,6 +4,7 @@ import { ArrowLeft } from "lucide-react";
 import { isConfigured } from "@/lib/env";
 import { getCurrentUser, displayName } from "@/lib/auth";
 import { getUserSummaries } from "@/lib/history";
+import { getUserFolders } from "@/lib/folders";
 import { DashboardClient } from "@/components/dashboard/dashboard-client";
 
 export default async function DashboardPage() {
@@ -33,7 +34,16 @@ export default async function DashboardPage() {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
 
-  const summaries = await getUserSummaries(user.id);
+  const [summaries, folders] = await Promise.all([
+    getUserSummaries(user.id),
+    getUserFolders(user.id),
+  ]);
 
-  return <DashboardClient name={displayName(user)} summaries={summaries} />;
+  return (
+    <DashboardClient
+      name={displayName(user)}
+      summaries={summaries}
+      folders={folders}
+    />
+  );
 }

@@ -3,18 +3,21 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { Bookmark, LayoutGrid, List, LogOut, Search } from "lucide-react";
+import { Bookmark, LayoutGrid, List, LogOut, Search, X } from "lucide-react";
 import type { SummaryListItem } from "@/lib/history";
+import type { Folder } from "@/lib/folders";
 import {
   cn,
   formatDuration,
   formatRelativeTime,
 } from "@/lib/utils";
 import { UrlInput } from "@/components/url-input";
+import { FolderMenu } from "./folder-menu";
 
 interface DashboardClientProps {
   name: string;
   summaries: SummaryListItem[];
+  folders: Folder[];
 }
 
 type Filter = "all" | "recent" | "favorites";
@@ -22,13 +25,83 @@ type ViewMode = "grid" | "list";
 
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 
-export function DashboardClient({ name, summaries }: DashboardClientProps) {
+export function DashboardClient({
+  name,
+  summaries,
+  folders: initialFolders,
+}: DashboardClientProps) {
   const [items, setItems] = useState(summaries);
+  const [folders, setFolders] = useState(initialFolders);
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<Filter>("all");
+  const [activeFolder, setActiveFolder] = useState<string | null>(null);
   const [view, setView] = useState<ViewMode>("grid");
   // Stable "now" captured once at mount (avoids impure Date.now() in render).
   const [now] = useState(() => Date.now());
+
+  function recountFolders(list: SummaryListItem[]) {
+    setFolders((prev) =>
+      prev.map((f) => ({
+        ...f,
+        count: list.filter((i) => i.folderId === f.id).length,
+      })),
+    );
+  }
+
+  async function assignFolder(summaryId: string, folderId: string | null) {
+    const prevItems = items;
+    const nextItems = items.map((i) =>
+      i.id === summaryId ? { ...i, folderId } : i,
+    );
+    setItems(nextItems);
+    recountFolders(nextItems);
+    try {
+      const res = await fetch("/api/folders/assign", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ summaryId, folderId }),
+      });
+      if (!(await res.json()).ok) throw new Error();
+    } catch {
+      setItems(prevItems);
+      recountFolders(prevItems);
+    }
+  }
+
+  async function createFolderAndAssign(summaryId: string, name: string) {
+    try {
+      const res = await fetch("/api/folders", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name }),
+      });
+      const json = await res.json();
+      if (!json.ok) return;
+      setFolders((prev) => [...prev, json.folder]);
+      await assignFolder(summaryId, json.folder.id);
+    } catch {
+      // ignore
+    }
+  }
+
+  async function deleteFolder(folderId: string) {
+    const prevFolders = folders;
+    const prevItems = items;
+    setFolders((prev) => prev.filter((f) => f.id !== folderId));
+    setItems((prev) =>
+      prev.map((i) => (i.folderId === folderId ? { ...i, folderId: null } : i)),
+    );
+    if (activeFolder === folderId) setActiveFolder(null);
+    try {
+      const res = await fetch(`/api/folders?id=${folderId}`, {
+        method: "DELETE",
+      });
+      if (!(await res.json()).ok) throw new Error();
+    } catch {
+      setFolders(prevFolders);
+      setItems(prevItems);
+    }
+  }
 
   async function toggleFavorite(id: string) {
     const target = items.find((i) => i.id === id);
@@ -68,6 +141,7 @@ export function DashboardClient({ name, summaries }: DashboardClientProps) {
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();
     return items.filter((s) => {
+      if (activeFolder !== null && s.folderId !== activeFolder) return false;
       if (filter === "favorites" && !s.isFavorite) return false;
       if (
         filter === "recent" &&
@@ -80,7 +154,7 @@ export function DashboardClient({ name, summaries }: DashboardClientProps) {
         s.channelName.toLowerCase().includes(q)
       );
     });
-  }, [items, query, filter, now]);
+  }, [items, query, filter, activeFolder, now]);
 
   return (
     <div className="min-h-screen">
@@ -120,10 +194,13 @@ export function DashboardClient({ name, summaries }: DashboardClientProps) {
             {(["all", "recent", "favorites"] as const).map((f) => (
               <button
                 key={f}
-                onClick={() => setFilter(f)}
+                onClick={() => {
+                  setFilter(f);
+                  setActiveFolder(null);
+                }}
                 className={cn(
                   "rounded-pill px-3 py-1.5 text-sm capitalize transition-colors",
-                  filter === f
+                  filter === f && activeFolder === null
                     ? "bg-surface-2 text-text-primary"
                     : "text-text-secondary hover:text-text-primary",
                 )}
@@ -154,25 +231,77 @@ export function DashboardClient({ name, summaries }: DashboardClientProps) {
           </div>
         </div>
 
+        {/* Folders bar */}
+        {folders.length > 0 ? (
+          <div className="mt-4 flex flex-wrap items-center gap-2">
+            <span className="text-xs uppercase tracking-wide text-text-tertiary">
+              Folders
+            </span>
+            {folders.map((f) => (
+              <span
+                key={f.id}
+                className={cn(
+                  "group inline-flex items-center gap-1.5 rounded-pill border px-3 py-1 text-sm transition-colors",
+                  activeFolder === f.id
+                    ? "border-accent bg-accent/10 text-text-primary"
+                    : "border-border text-text-secondary hover:text-text-primary",
+                )}
+              >
+                <button
+                  onClick={() =>
+                    setActiveFolder((cur) => (cur === f.id ? null : f.id))
+                  }
+                >
+                  {f.name}
+                  <span className="ml-1.5 text-text-tertiary">{f.count}</span>
+                </button>
+                <button
+                  onClick={() => deleteFolder(f.id)}
+                  aria-label={`Delete folder ${f.name}`}
+                  className="text-text-tertiary opacity-0 transition-opacity hover:text-danger group-hover:opacity-100"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </span>
+            ))}
+          </div>
+        ) : null}
+
         {/* Content */}
         {items.length === 0 ? (
           <EmptyState />
         ) : visible.length === 0 ? (
           <p className="mt-16 text-center text-text-tertiary">
-            {filter === "favorites"
-              ? "No favorites yet — tap the bookmark on any summary."
-              : "No summaries match your search."}
+            {activeFolder !== null
+              ? "This folder is empty — move summaries in with the folder icon."
+              : filter === "favorites"
+                ? "No favorites yet — tap the bookmark on any summary."
+                : "No summaries match your search."}
           </p>
         ) : view === "grid" ? (
           <div className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
             {visible.map((s) => (
-              <GridCard key={s.id} item={s} onToggleFav={toggleFavorite} />
+              <GridCard
+                key={s.id}
+                item={s}
+                folders={folders}
+                onToggleFav={toggleFavorite}
+                onAssign={assignFolder}
+                onCreateAndAssign={createFolderAndAssign}
+              />
             ))}
           </div>
         ) : (
           <div className="mt-8 divide-y divide-border border-y border-border">
             {visible.map((s) => (
-              <ListRow key={s.id} item={s} onToggleFav={toggleFavorite} />
+              <ListRow
+                key={s.id}
+                item={s}
+                folders={folders}
+                onToggleFav={toggleFavorite}
+                onAssign={assignFolder}
+                onCreateAndAssign={createFolderAndAssign}
+              />
             ))}
           </div>
         )}
@@ -212,13 +341,21 @@ function ViewToggle({
   );
 }
 
+interface CardProps {
+  item: SummaryListItem;
+  folders: Folder[];
+  onToggleFav: (id: string) => void;
+  onAssign: (summaryId: string, folderId: string | null) => void;
+  onCreateAndAssign: (summaryId: string, name: string) => void;
+}
+
 function GridCard({
   item,
+  folders,
   onToggleFav,
-}: {
-  item: SummaryListItem;
-  onToggleFav: (id: string) => void;
-}) {
+  onAssign,
+  onCreateAndAssign,
+}: CardProps) {
   return (
     <Link
       href={`/summary/${item.youtubeId}`}
@@ -241,10 +378,18 @@ function GridCard({
         <h3 className="mt-1 line-clamp-2 font-serif text-[15px] leading-snug text-text-primary">
           {item.title}
         </h3>
-        <p className="mt-3 text-xs text-text-tertiary">
-          {formatDuration(item.durationSeconds)} ·{" "}
-          {formatRelativeTime(item.completedAt)}
-        </p>
+        <div className="mt-3 flex items-center justify-between">
+          <p className="text-xs text-text-tertiary">
+            {formatDuration(item.durationSeconds)} ·{" "}
+            {formatRelativeTime(item.completedAt)}
+          </p>
+          <FolderMenu
+            folders={folders}
+            currentFolderId={item.folderId}
+            onAssign={(fid) => onAssign(item.id, fid)}
+            onCreateAndAssign={(name) => onCreateAndAssign(item.id, name)}
+          />
+        </div>
       </div>
     </Link>
   );
@@ -252,11 +397,11 @@ function GridCard({
 
 function ListRow({
   item,
+  folders,
   onToggleFav,
-}: {
-  item: SummaryListItem;
-  onToggleFav: (id: string) => void;
-}) {
+  onAssign,
+  onCreateAndAssign,
+}: CardProps) {
   return (
     <Link
       href={`/summary/${item.youtubeId}`}
@@ -282,6 +427,12 @@ function ListRow({
         {formatRelativeTime(item.completedAt)}
       </p>
       <FavButton item={item} onToggleFav={onToggleFav} />
+      <FolderMenu
+        folders={folders}
+        currentFolderId={item.folderId}
+        onAssign={(fid) => onAssign(item.id, fid)}
+        onCreateAndAssign={(name) => onCreateAndAssign(item.id, name)}
+      />
     </Link>
   );
 }

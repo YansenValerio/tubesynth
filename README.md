@@ -106,4 +106,4 @@ trigger.config.ts         Trigger.dev config
 - [x] Multi-language summary translation (timestamp-preserving)
 - [x] Favorites: bookmark summaries (optimistic, ownership-checked)
 - [x] Persist Q&A conversations across reloads (per-video localStorage)
-- [ ] Folders/collections in the dashboard
+- [x] Folders/collections in the dashboard (create, assign, filter)

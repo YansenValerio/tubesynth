@@ -12,6 +12,7 @@ export interface SummaryListItem {
   thumbnailUrl: string;
   completedAt: string | null;
   isFavorite: boolean;
+  folderId: string | null;
 }
 
 /** A signed-in user's completed summaries, newest first. */
@@ -23,7 +24,7 @@ export async function getUserSummaries(
     const db = createSupabaseAdminClient();
     const { data: summaries } = await db
       .from("summaries")
-      .select("id, video_id, completed_at, is_favorite")
+      .select("id, video_id, completed_at, is_favorite, folder_id")
       .eq("user_id", userId)
       .eq("status", "completed")
       .order("completed_at", { ascending: false })
@@ -55,6 +56,7 @@ export async function getUserSummaries(
           thumbnailUrl: v.thumbnail_url ?? "",
           completedAt: s.completed_at,
           isFavorite: s.is_favorite ?? false,
+          folderId: s.folder_id ?? null,
         } satisfies SummaryListItem;
       })
       .filter((x): x is SummaryListItem => x !== null);

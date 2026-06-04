@@ -76,6 +76,7 @@ export interface Database {
           error_message: string | null;
           is_public: boolean;
           is_favorite: boolean;
+          folder_id: string | null;
           share_slug: string | null;
           created_at: string;
           completed_at: string | null;
@@ -97,6 +98,7 @@ export interface Database {
           error_message?: string | null;
           is_public?: boolean;
           is_favorite?: boolean;
+          folder_id?: string | null;
           share_slug?: string | null;
           created_at?: string;
           completed_at?: string | null;
@@ -122,6 +124,22 @@ export interface Database {
           updated_at?: string;
         };
         Update: Partial<Database["public"]["Tables"]["qa_sessions"]["Insert"]>;
+        Relationships: [];
+      };
+      folders: {
+        Row: {
+          id: string;
+          user_id: string;
+          name: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          name: string;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["folders"]["Insert"]>;
         Relationships: [];
       };
     };
