@@ -1,0 +1,126 @@
+@import "tailwindcss";
+
+/* Dark mode is class-based; `.dark` is applied on <html> by default. */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* ------------------------------------------------------------------ */
+/* Design tokens — Light mode (warm, paper-like)                       */
+/* ------------------------------------------------------------------ */
+:root {
+  --background: #fafaf7;
+  --surface: #ffffff;
+  --surface-2: #f4f3ee;
+  --border: #e8e6e0;
+  --text-primary: #0f0f0f;
+  --text-secondary: #5c5c5c;
+  --text-tertiary: #8a8a8a;
+  --accent: #e85d2f;
+  --accent-hover: #d44a1f;
+  --accent-contrast: #ffffff;
+  --success: #2d7a3e;
+  --warning: #c77d0e;
+  --danger: #b83a2e;
+}
+
+/* ------------------------------------------------------------------ */
+/* Design tokens — Dark mode (primary aesthetic, deep warm black)      */
+/* ------------------------------------------------------------------ */
+.dark {
+  --background: #0e0e0c;
+  --surface: #18181a;
+  --surface-2: #222224;
+  --border: #2a2a2c;
+  --text-primary: #f5f5f0;
+  --text-secondary: #a8a8a0;
+  --text-tertiary: #6b6b65;
+  --accent: #ff7a4d;
+  --accent-hover: #ff9068;
+  --accent-contrast: #0e0e0c;
+  --success: #54b06a;
+  --warning: #e0a440;
+  --danger: #e0685a;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-border: var(--border);
+  --color-text-primary: var(--text-primary);
+  --color-text-secondary: var(--text-secondary);
+  --color-text-tertiary: var(--text-tertiary);
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-contrast: var(--accent-contrast);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-danger: var(--danger);
+
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-serif: var(--font-instrument-serif), ui-serif, Georgia, serif;
+  --font-mono: var(--font-jetbrains-mono), ui-monospace, monospace;
+
+  --radius-card: 12px;
+  --radius-base: 8px;
+  --radius-pill: 999px;
+
+  --ease-smooth: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+* {
+  border-color: var(--border);
+}
+
+body {
+  background: var(--background);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+::selection {
+  background: var(--accent);
+  color: var(--accent-contrast);
+}
+
+/* Subtle, deliberate scrollbar */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-tertiary);
+}
+
+/* Reusable entrance animation: fade-up on scroll/mount */
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-up {
+  animation: fade-up 0.6s var(--ease-smooth) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-fade-up {
+    animation: none;
+  }
+  * {
+    scroll-behavior: auto !important;
+  }
+}
