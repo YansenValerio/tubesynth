@@ -105,5 +105,5 @@ trigger.config.ts         Trigger.dev config
 - [x] Public share pages (`/s/[slug]`) with conversion CTAs
 - [x] Multi-language summary translation (timestamp-preserving)
 - [x] Favorites: bookmark summaries (optimistic, ownership-checked)
-- [ ] Persist Q&A sessions across reloads
+- [x] Persist Q&A conversations across reloads (per-video localStorage)
 - [ ] Folders/collections in the dashboard
