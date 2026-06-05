@@ -1,7 +1,7 @@
 import { defineConfig } from "@trigger.dev/sdk";
 
 export default defineConfig({
-  project: process.env.TRIGGER_PROJECT_ID ?? "proj_tubesynth",
+  project: process.env.TRIGGER_PROJECT_ID ?? "proj_chqjxjmdcdpvkffccyxc",
   runtime: "node",
   logLevel: "info",
   maxDuration: 900, // 15 min ceiling for very long (12h) videos
