@@ -1,5 +1,5 @@
-import "server-only";
-
+// Server-side only (uses GEMINI_API_KEY). Shared by Next routes and the
+// Trigger.dev worker, so no `server-only` guard.
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { env } from "@/lib/env";
 

@@ -1,5 +1,5 @@
-import "server-only";
-
+// Server-side only. Shared by Next routes and the Trigger.dev worker, so no
+// `server-only` guard.
 import pMap from "p-map";
 import type {
   SummaryContent,

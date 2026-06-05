@@ -1,5 +1,5 @@
-import "server-only";
-
+// Server-side only (network fetch). Runs in Next server routes and the
+// Trigger.dev worker — no `server-only` guard so it bundles in both runtimes.
 import { thumbnailUrl, watchUrl } from "@/lib/youtube";
 import type { VideoMetadata } from "@/lib/types";
 

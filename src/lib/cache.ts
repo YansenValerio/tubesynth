@@ -1,5 +1,5 @@
-import "server-only";
-
+// Server-side only (uses the service-role key). Shared by Next routes and the
+// Trigger.dev worker, so no `server-only` guard.
 import { createSupabaseAdminClient } from "@/lib/supabase/server";
 import { isConfigured } from "@/lib/env";
 import type {
