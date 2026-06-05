@@ -1,13 +1,13 @@
 // Server-side only (uses GEMINI_API_KEY). Shared by Next routes and the
 // Trigger.dev worker, so no `server-only` guard.
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { GoogleGenAI } from "@google/genai";
 import { env } from "@/lib/env";
 
-let client: GoogleGenerativeAI | null = null;
+let client: GoogleGenAI | null = null;
 
-function getClient(): GoogleGenerativeAI {
+function getClient(): GoogleGenAI {
   if (client) return client;
-  client = new GoogleGenerativeAI(env.gemini.apiKey);
+  client = new GoogleGenAI({ apiKey: env.gemini.apiKey });
   return client;
 }
 
@@ -17,33 +17,47 @@ export interface GeminiResult<T> {
   tokensOutput: number;
 }
 
+// Thinking is disabled (thinkingBudget: 0) — it adds latency and, on flash
+// models, can consume the output budget and truncate JSON. We don't need it
+// for structured extraction.
+const NO_THINKING = { thinkingBudget: 0 } as const;
+
 /**
- * Run a prompt and parse the model's JSON response. Uses JSON response mode so
- * the model returns a bare object. Strips accidental code fences defensively.
+ * Run a prompt and parse the model's JSON response (JSON response mode). On a
+ * parse failure the request is regenerated a couple of times before giving up.
  */
 export async function generateJson<T>(
   prompt: string,
   modelName: string = env.gemini.model,
 ): Promise<GeminiResult<T>> {
-  const model = getClient().getGenerativeModel({
-    model: modelName,
-    generationConfig: {
-      responseMimeType: "application/json",
-      temperature: 0.4,
-    },
-  });
-
-  const result = await withRetry(() => model.generateContent(prompt));
-  const response = result.response;
-  const text = response.text();
-
-  const usage = response.usageMetadata;
-
-  return {
-    data: parseJson<T>(text),
-    tokensInput: usage?.promptTokenCount ?? 0,
-    tokensOutput: usage?.candidatesTokenCount ?? 0,
-  };
+  let lastErr: unknown;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const res = await withRetry(() =>
+      getClient().models.generateContent({
+        model: modelName,
+        contents: prompt,
+        config: {
+          responseMimeType: "application/json",
+          temperature: 0.4,
+          maxOutputTokens: 8192,
+          thinkingConfig: NO_THINKING,
+        },
+      }),
+    );
+    const usage = res.usageMetadata;
+    try {
+      return {
+        data: parseJson<T>(res.text ?? ""),
+        tokensInput: usage?.promptTokenCount ?? 0,
+        tokensOutput: usage?.candidatesTokenCount ?? 0,
+      };
+    } catch (err) {
+      lastErr = err; // malformed JSON — regenerate
+    }
+  }
+  throw lastErr instanceof Error
+    ? lastErr
+    : new Error("Model did not return valid JSON.");
 }
 
 /** Run a prompt and return plain text (used for conversational Q&A). */
@@ -51,14 +65,16 @@ export async function generateText(
   prompt: string,
   modelName: string = env.gemini.model,
 ): Promise<{ text: string; tokensInput: number; tokensOutput: number }> {
-  const model = getClient().getGenerativeModel({
-    model: modelName,
-    generationConfig: { temperature: 0.5 },
-  });
-  const result = await withRetry(() => model.generateContent(prompt));
-  const usage = result.response.usageMetadata;
+  const res = await withRetry(() =>
+    getClient().models.generateContent({
+      model: modelName,
+      contents: prompt,
+      config: { temperature: 0.5, thinkingConfig: NO_THINKING },
+    }),
+  );
+  const usage = res.usageMetadata;
   return {
-    text: result.response.text().trim(),
+    text: (res.text ?? "").trim(),
     tokensInput: usage?.promptTokenCount ?? 0,
     tokensOutput: usage?.candidatesTokenCount ?? 0,
   };
@@ -77,10 +93,9 @@ async function withRetry<T>(fn: () => Promise<T>, maxRetries = 6): Promise<T> {
       const isRateLimit = /\b429\b|too many requests|quota|rate.?limit/i.test(msg);
       if (!isRateLimit || attempt >= maxRetries) throw err;
 
-      // Prefer the server-suggested delay; fall back to exponential backoff.
       const suggested =
         msg.match(/retry in ([\d.]+)\s*s/i)?.[1] ??
-        msg.match(/"retryDelay":"([\d.]+)s"/)?.[1];
+        msg.match(/"?retryDelay"?:\s*"?([\d.]+)s/i)?.[1];
       const delayMs = suggested
         ? Math.ceil(parseFloat(suggested) * 1000) + 500
         : Math.min(2 ** attempt * 1000, 30000);
