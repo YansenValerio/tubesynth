@@ -8,7 +8,7 @@ import {
   TranscriptError,
 } from "@/lib/transcript";
 import { tasks } from "@trigger.dev/sdk";
-import { summarize } from "@/lib/summarize";
+import { summarize, chooseStrategy } from "@/lib/summarize";
 import {
   backgroundEnabled,
   createPendingSummary,
@@ -79,31 +79,6 @@ export async function POST(req: NextRequest) {
   }
 
   const userId = (await getCurrentUser())?.id ?? null;
-
-  // Background path: enqueue a Trigger.dev job and let the client poll.
-  if (backgroundEnabled()) {
-    try {
-      const meta = await fetchVideoMetadata(youtubeId);
-      const summaryId = await createPendingSummary(meta, language, userId);
-      if (summaryId) {
-        await tasks.trigger("summarize-video", {
-          summaryId,
-          youtubeId,
-          language,
-        });
-        return NextResponse.json({
-          ok: true,
-          mode: "job",
-          summaryId,
-          metadata: meta,
-        });
-      }
-    } catch (err) {
-      // Fall through to inline processing if enqueue fails.
-      console.error("background enqueue failed, running inline:", err);
-    }
-  }
-
   const started = Date.now();
   try {
     const meta = await fetchVideoMetadata(youtubeId);
@@ -116,6 +91,31 @@ export async function POST(req: NextRequest) {
         "TOO_LONG",
         413,
       );
+    }
+
+    // Long videos (chunked/hierarchical) → background job when Trigger.dev is
+    // configured. Short videos stay inline so they're instant and need no
+    // worker running. The task re-fetches the transcript itself.
+    if (chooseStrategy(meta.durationSeconds) !== "single" && backgroundEnabled()) {
+      try {
+        const summaryId = await createPendingSummary(meta, language, userId);
+        if (summaryId) {
+          await tasks.trigger("summarize-video", {
+            summaryId,
+            youtubeId,
+            language,
+          });
+          return NextResponse.json({
+            ok: true,
+            mode: "job",
+            summaryId,
+            metadata: meta,
+          });
+        }
+      } catch (err) {
+        // Fall through to inline processing if enqueue fails.
+        console.error("background enqueue failed, running inline:", err);
+      }
     }
 
     const { content, strategy } = await summarize(meta, segments, language);
