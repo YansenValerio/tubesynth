@@ -33,7 +33,7 @@ export async function generateJson<T>(
     },
   });
 
-  const result = await model.generateContent(prompt);
+  const result = await withRetry(() => model.generateContent(prompt));
   const response = result.response;
   const text = response.text();
 
@@ -55,13 +55,39 @@ export async function generateText(
     model: modelName,
     generationConfig: { temperature: 0.5 },
   });
-  const result = await model.generateContent(prompt);
+  const result = await withRetry(() => model.generateContent(prompt));
   const usage = result.response.usageMetadata;
   return {
     text: result.response.text().trim(),
     tokensInput: usage?.promptTokenCount ?? 0,
     tokensOutput: usage?.candidatesTokenCount ?? 0,
   };
+}
+
+/**
+ * Retry on 429 rate-limit errors, honoring Google's suggested retry delay
+ * (free tier is ~5 requests/minute). Other errors propagate immediately.
+ */
+async function withRetry<T>(fn: () => Promise<T>, maxRetries = 6): Promise<T> {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await fn();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      const isRateLimit = /\b429\b|too many requests|quota|rate.?limit/i.test(msg);
+      if (!isRateLimit || attempt >= maxRetries) throw err;
+
+      // Prefer the server-suggested delay; fall back to exponential backoff.
+      const suggested =
+        msg.match(/retry in ([\d.]+)\s*s/i)?.[1] ??
+        msg.match(/"retryDelay":"([\d.]+)s"/)?.[1];
+      const delayMs = suggested
+        ? Math.ceil(parseFloat(suggested) * 1000) + 500
+        : Math.min(2 ** attempt * 1000, 30000);
+
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+    }
+  }
 }
 
 function parseJson<T>(text: string): T {

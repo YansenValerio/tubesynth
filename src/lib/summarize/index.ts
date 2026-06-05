@@ -30,7 +30,9 @@ interface ChunkSummary {
   transitionsTo: string;
 }
 
-const CONCURRENCY = 5;
+// Kept low to respect Gemini free-tier rate limits (~5 requests/minute).
+// gemini.ts retries on 429, so this mainly controls burst size.
+const CONCURRENCY = 2;
 
 /** Pick a strategy from duration (PRD §8.4). */
 export function chooseStrategy(durationSeconds: number): SummaryStrategy {
